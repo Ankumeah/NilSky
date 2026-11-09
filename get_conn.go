@@ -25,8 +25,6 @@ func GetConn() (*xgbutil.XUtil, error) {
 
 	xevent.MapRequestFun(
 		func(x *xgbutil.XUtil, e xevent.MapRequestEvent) {
-			xproto.MapWindow(x.Conn(), e.Window)
-
 			screen, err := xproto.GetGeometry(
 				x.Conn(),
 				xproto.Drawable(x.RootWin()),
