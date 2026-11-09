@@ -1,0 +1,52 @@
+name: Create release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    env:
+      GOOS_LIST: "linux freebsd openbsd netbsd"
+      GOARCH_LIST: "amd64"
+      CGO_ENABLED: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile binaries
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p build
+          for os in $GOOS_LIST; do
+            for arch in $GOARCH_LIST; do
+              GOOS="$os" GOARCH="$arch" \
+                go build \
+                  -o "build/nilsky-${TAG}-${os}-${arch}" \
+                  -ldflags="-s -w" \
+                  .
+            done
+          done
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" build/* \
+            --repo="$GITHUB_REPOSITORY" \
+            --title="$TAG" \
+            --generate-notes

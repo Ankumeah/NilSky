@@ -1,0 +1,26 @@
+name: ci
+
+on: [ push, pull_request ]
+
+jobs:
+  ci:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Install deps
+        run: go mod download
+
+      - name: Run ci
+        run: CI=true ./.ci.sh
