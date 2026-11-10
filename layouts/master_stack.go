@@ -35,6 +35,10 @@ type MasterStack struct {
 	stack  []masterStackWindow
 }
 
+func init() {
+	Layouts["master_stack"] = GetMasterStack
+}
+
 func GetMasterStack(config []byte) (Layout, error) {
 	layout := &MasterStack{}
 

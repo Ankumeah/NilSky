@@ -17,7 +17,7 @@ func Tile(x *xgbutil.XUtil, layout config.Layout) error {
 
 	info.workspaces = map[uint]layouts.Layout{}
 
-	info.workspaces[0], err = layouts.GetMasterStack(layoutConfig)
+	info.workspaces[0], err = layouts.Layouts[layout.Name](layoutConfig)
 	if err != nil {
 		return fmt.Errorf("Invalid layout config: %w\n", err)
 	}
