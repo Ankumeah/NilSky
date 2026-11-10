@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/Ankumeah/NilSky/config"
+	"github.com/Ankumeah/NilSky/tile"
 	"github.com/jezek/xgbutil/xevent"
 )
 
@@ -16,6 +17,10 @@ func main() {
 	config, err := config.LoadConfig("")
 	if err != nil {
 		log.Fatalf("Error loading config: %v\n", err)
+	}
+
+	if err := tile.Tile(x, config.Layout); err != nil {
+		log.Fatalf("Error setting up tiling: %v\n", err)
 	}
 
 	if err := LoadKeybinds(x, config.Keybinds); err != nil {
