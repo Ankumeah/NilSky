@@ -13,7 +13,7 @@ func mapRequest(x *xgbutil.XUtil) {
 			info.mu.Lock()
 			defer info.mu.Unlock()
 
-			if err := info.workspaces[info.currentWS].AddWindow(x, e); err != nil {
+			if err := info.workspaces[info.currentWS].Map(x, e); err != nil {
 				log.Printf("Error mapping window: %v\n", err)
 			}
 		},

@@ -1,8 +1,8 @@
 // [WARNING]
 //
 // THIS IS PROBABLY ONE OF THE
-// UGLIEST FIELS I HAVE EVER WRITTEN
-// AND IV WROTE A LOT OF UGLY FIELS
+// UGLIEST FILES I HAVE EVER WRITTEN
+// AND IV WROTE A LOT OF UGLY FILES
 //
 // YOU HAVE BEEN WARNED
 
@@ -12,9 +12,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/jezek/xgb/xproto"
 	"github.com/jezek/xgbutil"
+	"github.com/jezek/xgbutil/keybind"
+	"github.com/jezek/xgbutil/mousebind"
 	"github.com/jezek/xgbutil/xevent"
 )
 
@@ -55,7 +58,7 @@ func GetMasterStack(config []byte) (Layout, error) {
 	return layout, nil
 }
 
-func (l *MasterStack) AddWindow(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
+func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 	window := masterStackWindow{
 		id: e.Window,
 	}
@@ -152,9 +155,143 @@ func (l *MasterStack) AddWindow(x *xgbutil.XUtil, e xevent.MapRequestEvent) erro
 		return fmt.Errorf("Error mapping window: %v\n", err)
 	}
 
+	xevent.DestroyNotifyFun(
+		func(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) {
+			if err := l.destroy(x, e); err != nil {
+				log.Printf("Error removing window: %v\n", err)
+			}
+		},
+	).Connect(x, e.Window)
+
 	return nil
 }
 
-func (l *MasterStack) RemoveWindow(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
-	return errors.New("Unimplimented") // TODO: Do something with my life, idk
+func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) error {
+	if e.Window == l.master.id && len(l.stack) == 0 {
+		l.master = nil
+	} else if e.Window == l.master.id && len(l.stack) == 1 {
+		l.master = &l.stack[0]
+		l.stack = l.stack[1:]
+
+		if err := xproto.ConfigureWindowChecked(
+			x.Conn(), l.master.id,
+			xproto.ConfigWindowX|
+				xproto.ConfigWindowY|
+				xproto.ConfigWindowWidth|
+				xproto.ConfigWindowHeight,
+			[]uint32{
+				uint32(0),
+				uint32(0),
+				uint32(l.Screen.Size.Width),
+				uint32(l.Screen.Size.Heigh),
+			},
+		).Check(); err != nil {
+			return fmt.Errorf("Error resizing window: %v\n", err)
+		}
+	} else if e.Window == l.master.id {
+		l.master = &l.stack[0]
+		l.stack = l.stack[1:]
+
+		height := l.Screen.Size.Heigh / uint(len(l.stack))
+		width := (l.Mfact * int(l.Screen.Size.Width)) / 100
+
+		masterPosX := 0
+		posX := int(l.Screen.Size.Width) - width
+		if width < 0 {
+			posX = 0
+			width *= -1
+			masterPosX = int(l.Screen.Size.Width) - width
+		}
+
+		if err := xproto.ConfigureWindowChecked(
+			x.Conn(), l.master.id,
+			xproto.ConfigWindowX|
+				xproto.ConfigWindowY|
+				xproto.ConfigWindowWidth|
+				xproto.ConfigWindowHeight,
+			[]uint32{
+				uint32(masterPosX),
+				uint32(0),
+				uint32(l.Screen.Size.Width - uint(width)),
+				uint32(l.Screen.Size.Heigh),
+			},
+		).Check(); err != nil {
+			return fmt.Errorf("Error resizing window: %v\n", err)
+		}
+
+		for i, win := range l.stack {
+			if err := xproto.ConfigureWindowChecked(
+				x.Conn(), win.id,
+				xproto.ConfigWindowX|
+					xproto.ConfigWindowY|
+					xproto.ConfigWindowWidth|
+					xproto.ConfigWindowHeight,
+				[]uint32{
+					uint32(posX),
+					uint32(int(height) * i),
+					uint32(width),
+					uint32(height),
+				},
+			).Check(); err != nil {
+				return fmt.Errorf("Error resizing window: %v\n", err)
+			}
+		}
+	} else if len(l.stack) == 1 {
+		l.stack = []masterStackWindow{}
+
+		if err := xproto.ConfigureWindowChecked(
+			x.Conn(), l.master.id,
+			xproto.ConfigWindowX|
+				xproto.ConfigWindowY|
+				xproto.ConfigWindowWidth|
+				xproto.ConfigWindowHeight,
+			[]uint32{
+				uint32(0),
+				uint32(0),
+				uint32(l.Screen.Size.Width),
+				uint32(l.Screen.Size.Heigh),
+			},
+		).Check(); err != nil {
+			return fmt.Errorf("Error resizing window: %v\n", err)
+		}
+	} else {
+		for i, win := range l.stack {
+			if win.id == e.Window {
+				l.stack = append(l.stack[:i], l.stack[i+1:]...)
+			}
+		}
+
+		height := l.Screen.Size.Heigh / uint(len(l.stack))
+		width := (l.Mfact * int(l.Screen.Size.Width)) / 100
+
+		posX := int(l.Screen.Size.Width) - width
+		if width < 0 {
+			posX = 0
+			width *= -1
+		}
+
+		for i, win := range l.stack {
+			if err := xproto.ConfigureWindowChecked(
+				x.Conn(), win.id,
+				xproto.ConfigWindowX|
+					xproto.ConfigWindowY|
+					xproto.ConfigWindowWidth|
+					xproto.ConfigWindowHeight,
+				[]uint32{
+					uint32(posX),
+					uint32(int(height) * i),
+					uint32(width),
+					uint32(height),
+				},
+			).Check(); err != nil {
+				return fmt.Errorf("Error resizing window: %v\n", err)
+			}
+		}
+	}
+
+	xevent.Detach(x, e.Window)
+	keybind.Detach(x, e.Window)
+	mousebind.Detach(x, e.Window)
+
+	return nil
 }
