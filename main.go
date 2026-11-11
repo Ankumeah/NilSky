@@ -19,7 +19,7 @@ func main() {
 		log.Fatalf("Error loading config: %v\n", err)
 	}
 
-	if err := tile.Tile(x, config.Layout); err != nil {
+	if err := tile.Tile(x, config); err != nil {
 		log.Fatalf("Error setting up tiling: %v\n", err)
 	}
 

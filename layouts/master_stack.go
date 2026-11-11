@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/Ankumeah/NilSky/config"
 	"github.com/jezek/xgb/xproto"
 	"github.com/jezek/xgbutil"
 	"github.com/jezek/xgbutil/keybind"
@@ -35,6 +36,8 @@ type MasterStack struct {
 		} `json:"size"`
 	} `json:"screen"`
 
+	decor config.Decorations
+
 	master *masterStackWindow
 	stack  []masterStackWindow
 }
@@ -43,8 +46,11 @@ func init() {
 	Layouts["master_stack"] = GetMasterStack
 }
 
-func GetMasterStack(config []byte) (Layout, error) {
-	layout := &MasterStack{}
+func GetMasterStack(config []byte, decor config.Decorations) (Layout, error) {
+	layout := &MasterStack{
+		decor: decor,
+	}
+	layout.decor.GapsIn /= 2
 
 	if err := json.Unmarshal(config, &layout); err != nil {
 		return layout, err
@@ -69,10 +75,15 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 
 		if err := xproto.ConfigureWindowChecked(
 			x.Conn(), l.master.id,
-			xproto.ConfigWindowWidth|xproto.ConfigWindowHeight,
+			xproto.ConfigWindowX|
+				xproto.ConfigWindowY|
+				xproto.ConfigWindowWidth|
+				xproto.ConfigWindowHeight,
 			[]uint32{
-				uint32(l.Screen.Size.Width),
-				uint32(l.Screen.Size.Heigh),
+				uint32(l.decor.GapsOut),
+				uint32(l.decor.GapsOut),
+				uint32(l.Screen.Size.Width - (2 * l.decor.GapsOut)),
+				uint32(l.Screen.Size.Heigh - (2 * l.decor.GapsOut)),
 			},
 		).Check(); err != nil {
 			return fmt.Errorf("Error resizing window: %v\n", err)
@@ -80,14 +91,14 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 	} else if len(l.stack) == 0 {
 		l.stack = append(l.stack, window)
 
-		width := (l.Mfact * int(l.Screen.Size.Width)) / 100
+		width := ((l.Mfact * int(l.Screen.Size.Width-(2*l.decor.GapsIn)-(2*l.decor.GapsOut))) / 100)
 
-		posX := int(l.Screen.Size.Width) - width
-		masterPosX := 0
+		posX := int(l.Screen.Size.Width) - width - int(l.decor.GapsOut)
+		masterPosX := int(l.decor.GapsOut)
 		if width < 0 {
-			posX = 0
+			posX = int(l.decor.GapsOut)
 			width *= -1
-			masterPosX = int(l.Screen.Size.Width) - width
+			masterPosX = int(l.Screen.Size.Width) - width - int(l.decor.GapsOut)
 		}
 
 		if err := xproto.ConfigureWindowChecked(
@@ -98,9 +109,9 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 				xproto.ConfigWindowHeight,
 			[]uint32{
 				uint32(masterPosX),
-				uint32(0),
-				uint32(l.Screen.Size.Width - uint(width)),
-				uint32(l.Screen.Size.Heigh),
+				uint32(l.decor.GapsOut),
+				uint32((l.Screen.Size.Width - (2 * l.decor.GapsOut) - (2 * l.decor.GapsIn)) - uint(width)),
+				uint32(l.Screen.Size.Heigh - (2 * l.decor.GapsOut)),
 			},
 		).Check(); err != nil {
 			return fmt.Errorf("Error resizing window: %v\n", err)
@@ -114,9 +125,9 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 				xproto.ConfigWindowHeight,
 			[]uint32{
 				uint32(posX),
-				uint32(0),
+				uint32(l.decor.GapsOut),
 				uint32(width),
-				uint32(l.Screen.Size.Heigh),
+				uint32(l.Screen.Size.Heigh - (2 * l.decor.GapsOut)),
 			},
 		).Check(); err != nil {
 			return fmt.Errorf("Error resizing window: %v\n", err)
@@ -124,12 +135,12 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 	} else {
 		l.stack = append(l.stack, window)
 
-		height := l.Screen.Size.Heigh / uint(len(l.stack))
-		width := (l.Mfact * int(l.Screen.Size.Width)) / 100
+		height := (l.Screen.Size.Heigh - (2 * l.decor.GapsOut) - uint((len(l.stack)-1)*int(2*l.decor.GapsIn))) / uint(len(l.stack))
+		width := ((l.Mfact * int(l.Screen.Size.Width-(2*l.decor.GapsOut)-(2*l.decor.GapsIn))) / 100)
 
-		posX := int(l.Screen.Size.Width) - width
+		posX := int(l.Screen.Size.Width) - width - int(l.decor.GapsOut)
 		if width < 0 {
-			posX = 0
+			posX = int(l.decor.GapsOut)
 			width *= -1
 		}
 
@@ -142,7 +153,7 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 					xproto.ConfigWindowHeight,
 				[]uint32{
 					uint32(posX),
-					uint32(int(height) * i),
+					uint32((int(height+(2*l.decor.GapsIn)) * i) + int(l.decor.GapsOut)),
 					uint32(width),
 					uint32(height),
 				},
@@ -184,11 +195,13 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 }
 
 func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) error {
-	if e.Window == l.master.id && len(l.stack) == 0 {
+	if len(l.stack) == 0 {
 		l.master = nil
-	} else if e.Window == l.master.id && len(l.stack) == 1 {
-		l.master = &l.stack[0]
-		l.stack = l.stack[1:]
+	} else if len(l.stack) == 1 {
+		if e.Window == l.master.id {
+			l.master = &l.stack[0]
+		}
+		l.stack = []masterStackWindow{}
 
 		if err := xproto.ConfigureWindowChecked(
 			x.Conn(), l.master.id,
@@ -197,10 +210,10 @@ func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) err
 				xproto.ConfigWindowWidth|
 				xproto.ConfigWindowHeight,
 			[]uint32{
-				uint32(0),
-				uint32(0),
-				uint32(l.Screen.Size.Width),
-				uint32(l.Screen.Size.Heigh),
+				uint32(l.decor.GapsOut),
+				uint32(l.decor.GapsOut),
+				uint32(l.Screen.Size.Width - (2 * l.decor.GapsOut)),
+				uint32(l.Screen.Size.Heigh - (2 * l.decor.GapsOut)),
 			},
 		).Check(); err != nil {
 			return fmt.Errorf("Error resizing window: %v\n", err)
@@ -209,15 +222,15 @@ func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) err
 		l.master = &l.stack[0]
 		l.stack = l.stack[1:]
 
-		height := l.Screen.Size.Heigh / uint(len(l.stack))
-		width := (l.Mfact * int(l.Screen.Size.Width)) / 100
+		height := (l.Screen.Size.Heigh - (2 * l.decor.GapsOut) - uint((len(l.stack)-1)*int(2*l.decor.GapsIn))) / uint(len(l.stack))
+		width := ((l.Mfact * int(l.Screen.Size.Width-(2*l.decor.GapsOut)-(2*l.decor.GapsIn))) / 100)
 
-		masterPosX := 0
-		posX := int(l.Screen.Size.Width) - width
+		posX := int(l.Screen.Size.Width) - width - int(l.decor.GapsOut)
+		masterPosX := int(l.decor.GapsOut)
 		if width < 0 {
-			posX = 0
+			posX = int(l.decor.GapsOut)
 			width *= -1
-			masterPosX = int(l.Screen.Size.Width) - width
+			masterPosX = int(l.Screen.Size.Width) - width - int(l.decor.GapsOut)
 		}
 
 		if err := xproto.ConfigureWindowChecked(
@@ -228,9 +241,9 @@ func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) err
 				xproto.ConfigWindowHeight,
 			[]uint32{
 				uint32(masterPosX),
-				uint32(0),
-				uint32(l.Screen.Size.Width - uint(width)),
-				uint32(l.Screen.Size.Heigh),
+				uint32(l.decor.GapsOut),
+				uint32(l.Screen.Size.Width - uint(width) - (2 * l.decor.GapsIn) - (2 * l.decor.GapsOut)),
+				uint32(l.Screen.Size.Heigh - (2 * l.decor.GapsOut)),
 			},
 		).Check(); err != nil {
 			return fmt.Errorf("Error resizing window: %v\n", err)
@@ -245,7 +258,7 @@ func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) err
 					xproto.ConfigWindowHeight,
 				[]uint32{
 					uint32(posX),
-					uint32(int(height) * i),
+					uint32((int(height+(2*l.decor.GapsIn)) * i) + int(l.decor.GapsOut)),
 					uint32(width),
 					uint32(height),
 				},
@@ -278,12 +291,12 @@ func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) err
 			}
 		}
 
-		height := l.Screen.Size.Heigh / uint(len(l.stack))
-		width := (l.Mfact * int(l.Screen.Size.Width)) / 100
+		height := (l.Screen.Size.Heigh - (2 * l.decor.GapsOut) - uint((len(l.stack)-1)*int(2*l.decor.GapsIn))) / uint(len(l.stack))
+		width := ((l.Mfact * int(l.Screen.Size.Width-(2*l.decor.GapsOut)-(2*l.decor.GapsIn))) / 100)
 
-		posX := int(l.Screen.Size.Width) - width
+		posX := int(l.Screen.Size.Width) - width - int(l.decor.GapsOut)
 		if width < 0 {
-			posX = 0
+			posX = int(l.decor.GapsOut)
 			width *= -1
 		}
 
@@ -296,7 +309,7 @@ func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) err
 					xproto.ConfigWindowHeight,
 				[]uint32{
 					uint32(posX),
-					uint32(int(height) * i),
+					uint32((int(height+(2*l.decor.GapsIn)) * i) + int(l.decor.GapsOut)),
 					uint32(width),
 					uint32(height),
 				},

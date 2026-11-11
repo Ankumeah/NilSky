@@ -1,3 +1,7 @@
 package layouts
 
-var Layouts = map[string]func(config []byte) (Layout, error){}
+import (
+	"github.com/Ankumeah/NilSky/config"
+)
+
+var Layouts = map[string]func([]byte, config.Decorations) (Layout, error){}

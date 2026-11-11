@@ -9,15 +9,15 @@ import (
 	"github.com/jezek/xgbutil"
 )
 
-func Tile(x *xgbutil.XUtil, layout config.Layout) error {
-	layoutConfig, err := json.Marshal(layout.Config)
+func Tile(x *xgbutil.XUtil, config config.Config) error {
+	layoutConfig, err := json.Marshal(config.Layout.Config)
 	if err != nil {
 		return fmt.Errorf("Invalid layout config: %w\n", err)
 	}
 
 	info.workspaces = map[uint]layouts.Layout{}
 
-	info.workspaces[0], err = layouts.Layouts[layout.Name](layoutConfig)
+	info.workspaces[0], err = layouts.Layouts[config.Layout.Name](layoutConfig, config.Decorations)
 	if err != nil {
 		return fmt.Errorf("Invalid layout config: %w\n", err)
 	}
