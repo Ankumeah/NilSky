@@ -19,6 +19,7 @@ import (
 	"github.com/jezek/xgbutil/keybind"
 	"github.com/jezek/xgbutil/mousebind"
 	"github.com/jezek/xgbutil/xevent"
+	"github.com/jezek/xgbutil/xwindow"
 )
 
 type masterStackWindow struct {
@@ -163,6 +164,22 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 		},
 	).Connect(x, e.Window)
 
+	if err := xwindow.New(x, e.Window).Listen(xproto.EventMaskEnterWindow); err != nil {
+		return fmt.Errorf("Error listing for enter window: %w\n", err)
+	}
+
+	xevent.EnterNotifyFun(
+		func(x *xgbutil.XUtil, e xevent.EnterNotifyEvent) {
+			if e.Detail == xproto.NotifyDetailInferior {
+				return
+			}
+
+			if err := focus(x, e.Event); err != nil {
+				log.Printf("Error focusing window: %v\n", err)
+			}
+		},
+	).Connect(x, e.Window)
+
 	return nil
 }
 
@@ -294,4 +311,13 @@ func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) err
 	mousebind.Detach(x, e.Window)
 
 	return nil
+}
+
+func focus(x *xgbutil.XUtil, id xproto.Window) error {
+	return xproto.SetInputFocusChecked(
+		x.Conn(),
+		xproto.InputFocusPointerRoot,
+		id,
+		xproto.TimeCurrentTime,
+	).Check()
 }
