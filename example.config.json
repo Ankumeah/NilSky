@@ -1,0 +1,20 @@
+{
+  "keybinds": [
+    {
+      "cmd": [ "kitty" ],
+      "bind": "Mod4-a"
+    }
+  ],
+  "layout": {
+    "name": "master_stack",
+    "config": {
+      "mfact": 50,
+      "screen": {
+        "size": {
+          "width": 1920,
+          "height": 1080
+        }
+      }
+    }
+  }
+}
