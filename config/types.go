@@ -17,6 +17,8 @@ type Layout struct {
 }
 
 type Decorations struct {
-	GapsIn  uint `json:"gaps_in"`
-	GapsOut uint `json:"gaps_out"`
+	GapsIn      uint   `json:"gaps_in"`
+	GapsOut     uint   `json:"gaps_out"`
+	BorderWidth uint   `json:"border_width"`
+	BorderColor string `json:"border_color"`
 }

@@ -9,6 +9,7 @@
     "name": "master_stack",
     "config": {
       "mfact": 50,
+      "mleft": true,
       "screen": {
         "size": {
           "width": 1920,
@@ -18,7 +19,9 @@
     }
   },
   "decorations": {
-    "gaps_in": 5,
-    "gaps_out": 10
+    "border_width": 2,
+    "border_color": "#8ecae6",
+    "gaps_in": 4,
+    "gaps_out": 8
   }
 }

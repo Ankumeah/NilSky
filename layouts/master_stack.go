@@ -13,6 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 
 	"github.com/Ankumeah/NilSky/config"
 	"github.com/jezek/xgb/xproto"
@@ -24,11 +26,12 @@ import (
 )
 
 type masterStackWindow struct {
-	id     xproto.Window
-	x      uint
-	y      uint
-	width  uint
-	height uint
+	id      xproto.Window
+	frameID xproto.Window
+	x       uint
+	y       uint
+	width   uint
+	height  uint
 }
 
 type MasterStack struct {
@@ -48,6 +51,8 @@ type MasterStack struct {
 
 	masterWidth uint
 	stackWidth  uint
+
+	borderColor uint
 
 	masterX uint
 	stackX  uint
@@ -74,6 +79,15 @@ func GetMasterStack(config []byte, decor config.Decorations) (Layout, error) {
 	} else if l.Mfact == 0 {
 		return l, errors.New("master stack mfact must not be 0")
 	}
+
+	if !strings.HasPrefix(l.decor.BorderColor, "#") {
+		return l, errors.New("border_color must start with #")
+	}
+	borderColor, err := strconv.ParseUint(strings.TrimPrefix(l.decor.BorderColor, "#"), 16, 0)
+	if err != nil {
+		return l, errors.New("border_color must be a valid hex number")
+	}
+	l.borderColor = uint(borderColor)
 
 	l.height = l.Screen.Size.Heigh - (2 * decor.GapsOut)
 	l.width = l.Screen.Size.Width - (2 * decor.GapsOut)
@@ -132,7 +146,10 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 		return err
 	}
 
-	if err := xproto.MapWindowChecked(x.Conn(), e.Window).Check(); err != nil {
+	if err := xproto.MapWindowChecked(
+		x.Conn(),
+		e.Window,
+	).Check(); err != nil {
 		return fmt.Errorf("Error mapping window: %v\n", err)
 	}
 
@@ -144,8 +161,10 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 		},
 	).Connect(x, e.Window)
 
-	if err := xwindow.New(x, e.Window).Listen(xproto.EventMaskEnterWindow); err != nil {
-		return fmt.Errorf("Error listing for enter window: %w\n", err)
+	if err := xwindow.New(x, e.Window).Listen(
+		xproto.EventMaskEnterWindow,
+	); err != nil {
+		return fmt.Errorf("Error listing for EventMaskEnterWindow: %w\n", err)
 	}
 
 	xevent.EnterNotifyFun(
@@ -179,6 +198,7 @@ func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) err
 		l.master.height = l.height
 	} else if e.Window == l.master.id {
 		l.master.id = l.stack[0].id
+		l.master.frameID = l.stack[0].frameID
 		l.stack = l.stack[1:]
 
 		height := (l.height - (uint(len(l.stack)-1) * l.decor.GapsIn)) / uint(len(l.stack))
@@ -203,13 +223,20 @@ func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) err
 		}
 	}
 
-	if err := l.redraw(x); err != nil {
+	if err := xproto.DestroyWindowChecked(
+		x.Conn(),
+		e.Event,
+	).Check(); err != nil {
 		return err
 	}
 
 	xevent.Detach(x, e.Window)
 	keybind.Detach(x, e.Window)
 	mousebind.Detach(x, e.Window)
+
+	if err := l.redraw(x); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -228,25 +255,66 @@ func (l *MasterStack) redraw(x *xgbutil.XUtil) error {
 		return nil
 	}
 
-	if err := xproto.ConfigureWindowChecked(
-		x.Conn(), l.master.id,
-		xproto.ConfigWindowX|
-			xproto.ConfigWindowY|
-			xproto.ConfigWindowWidth|
-			xproto.ConfigWindowHeight,
-		[]uint32{
-			uint32(l.master.x),
-			uint32(l.master.y),
-			uint32(l.master.width),
-			uint32(l.master.height),
-		},
-	).Check(); err != nil {
-		return fmt.Errorf("Error resizing window: %v\n", err)
+	if err := l.newFramedWindow(x, l.master); err != nil {
+		return err
 	}
 
 	for _, win := range l.stack {
+		if err := l.newFramedWindow(x, win); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (l *MasterStack) newFramedWindow(x *xgbutil.XUtil, win *masterStackWindow) error {
+	if win.frameID == 0 {
+		frame, err := xwindow.Generate(x)
+		if err != nil {
+			return err
+		}
+
+		if err := frame.CreateChecked(
+			x.RootWin(),
+			int(win.x),
+			int(win.y),
+			int(win.width),
+			int(win.height),
+			xproto.CwBackPixel,
+			uint32(l.borderColor),
+		); err != nil {
+			return err
+		}
+
+		if err := frame.Listen(xproto.EventMaskSubstructureNotify); err != nil {
+			return fmt.Errorf("Error listing for EventMaskSubstructureNotify: %w\n", err)
+		}
+
+		if err := xproto.ChangeSaveSetChecked(
+			x.Conn(),
+			xproto.SetModeInsert,
+			win.id,
+		).Check(); err != nil {
+			return err
+		}
+
+		if err := xproto.ReparentWindowChecked(
+			x.Conn(),
+			win.id,
+			frame.Id,
+			int16(l.decor.BorderWidth),
+			int16(l.decor.BorderWidth),
+		).Check(); err != nil {
+			return err
+		}
+
+		frame.Map()
+
+		win.frameID = frame.Id
+	} else {
 		if err := xproto.ConfigureWindowChecked(
-			x.Conn(), win.id,
+			x.Conn(), win.frameID,
 			xproto.ConfigWindowX|
 				xproto.ConfigWindowY|
 				xproto.ConfigWindowWidth|
@@ -260,6 +328,22 @@ func (l *MasterStack) redraw(x *xgbutil.XUtil) error {
 		).Check(); err != nil {
 			return fmt.Errorf("Error resizing window: %v\n", err)
 		}
+	}
+
+	if err := xproto.ConfigureWindowChecked(
+		x.Conn(), win.id,
+		xproto.ConfigWindowX|
+			xproto.ConfigWindowY|
+			xproto.ConfigWindowWidth|
+			xproto.ConfigWindowHeight,
+		[]uint32{
+			uint32(l.decor.BorderWidth),
+			uint32(l.decor.BorderWidth),
+			uint32(win.width - (2 * l.decor.BorderWidth)),
+			uint32(win.height - (2 * l.decor.BorderWidth)),
+		},
+	).Check(); err != nil {
+		return fmt.Errorf("Error resizing window: %v\n", err)
 	}
 
 	return nil
