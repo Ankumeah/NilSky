@@ -8,7 +8,7 @@ run display = ":1" *args:
 
   if ! test -e /tmp/.X1-lock; then
     Xephyr :1 -ac -screen 1920x1080 &
-    sleep 2
+    sleep 1
   fi
 
   DISPLAY={{ display }} ./build/out {{ args }}
