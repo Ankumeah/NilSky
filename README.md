@@ -17,6 +17,9 @@ located at `$XDG_RUNTIME_DIR/nilsky.sock` to provide easy direct communication w
 
 Given below are the commands supported by the socket
 
+> [!NOTE]
+> All successful commands start with `OK: ` and all errors start with `ERROR: `
+
 ### `ping`
 Just responds with `OK: PONG`
 
