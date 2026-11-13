@@ -1,0 +1,27 @@
+{
+  "keybinds": [
+    {
+      "cmd": [ "kitty", "-o", "linux_display_server=x11" ],
+      "bind": "Mod4-a"
+    }
+  ],
+  "layout": {
+    "name": "master_stack",
+    "config": {
+      "mfact": 70,
+      "mleft": true,
+      "screen": {
+        "size": {
+          "width": 1920,
+          "height": 1080
+        }
+      }
+    }
+  },
+  "decorations": {
+    "border_width": 20,
+    "border_color": "#ffffff",
+    "gaps_in": 70,
+    "gaps_out": 100
+  }
+}

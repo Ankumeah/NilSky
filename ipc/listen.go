@@ -1,4 +1,4 @@
-package sock
+package ipc
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+
+	"github.com/jezek/xgbutil"
 
 	"github.com/Ankumeah/NilSky/meta"
 )
@@ -21,7 +23,7 @@ func getSocketPath() (string, error) {
 	return filepath.Join(path, meta.SocketFile), nil
 }
 
-func Listen(ctx context.Context) {
+func Listen(ctx context.Context, x *xgbutil.XUtil) {
 	socketPath, err := getSocketPath()
 	if err != nil {
 		log.Printf("Error getting socket path: %v\n", err)
@@ -64,7 +66,7 @@ func Listen(ctx context.Context) {
 				log.Printf("Error reading conn data: %v\n", err)
 			}
 
-			log.Printf("Sock: %s", string(data)) // TODO: Handle stuff
+			handleCommand(x, c, data)
 		}()
 	}
 }

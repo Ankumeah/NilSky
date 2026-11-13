@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/jezek/xgbutil"
+
 	"github.com/Ankumeah/NilSky/config"
 	"github.com/Ankumeah/NilSky/layouts"
-	"github.com/jezek/xgbutil"
 )
 
 func Tile(x *xgbutil.XUtil, config config.Config) error {

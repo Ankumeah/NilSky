@@ -1,0 +1,101 @@
+title: NilSky config
+type: object
+additionalProperties: false
+required:
+  - keybinds
+  - layout
+  - decorations
+properties:
+  keybinds:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - cmd
+        - bind
+      properties:
+        cmd:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        bind:
+          type: string
+
+  layout:
+    type: object
+    additionalProperties: false
+    required:
+      - name
+      - config
+    properties:
+      name:
+        type: string
+      config:
+        type: object
+    allOf:
+      - if:
+          properties:
+            name:
+              const: master_stack
+          required:
+            - name
+        then:
+          properties:
+            config:
+              type: object
+              additionalProperties: false
+              required:
+                - mfact
+                - mleft
+                - screen
+              properties:
+                mfact:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                mleft:
+                  type: boolean
+                screen:
+                  type: object
+                  additionalProperties: false
+                  required:
+                    - size
+                  properties:
+                    size:
+                      type: object
+                      additionalProperties: false
+                      required:
+                        - width
+                        - height
+                      properties:
+                        width:
+                          type: integer
+                          minimum: 1
+                        height:
+                          type: integer
+                          minimum: 1
+
+  decorations:
+    type: object
+    additionalProperties: false
+    required:
+      - border_width
+      - border_color
+      - gaps_in
+      - gaps_out
+    properties:
+      border_width:
+        type: integer
+        minimum: 0
+      border_color:
+        type: string
+        pattern: "^#[0-9A-Fa-f]{6}$"
+      gaps_in:
+        type: integer
+        minimum: 0
+      gaps_out:
+        type: integer
+        minimum: 0
+

@@ -2,7 +2,7 @@
   "keybinds": [
     {
       "cmd": [ "kitty" ],
-      "bind": "Mod4-a"
+      "bind": "Mod4-Return"
     }
   ],
   "layout": {

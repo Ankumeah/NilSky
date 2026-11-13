@@ -5,10 +5,11 @@ import (
 	"log"
 	"os/exec"
 
-	"github.com/Ankumeah/NilSky/config"
 	"github.com/jezek/xgbutil"
 	"github.com/jezek/xgbutil/keybind"
 	"github.com/jezek/xgbutil/xevent"
+
+	"github.com/Ankumeah/NilSky/config"
 )
 
 func LoadKeybinds(x *xgbutil.XUtil, binds []config.Keybind) error {

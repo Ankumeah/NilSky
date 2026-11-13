@@ -16,13 +16,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Ankumeah/NilSky/config"
 	"github.com/jezek/xgb/xproto"
 	"github.com/jezek/xgbutil"
 	"github.com/jezek/xgbutil/keybind"
 	"github.com/jezek/xgbutil/mousebind"
 	"github.com/jezek/xgbutil/xevent"
+	"github.com/jezek/xgbutil/xprop"
 	"github.com/jezek/xgbutil/xwindow"
+
+	"github.com/Ankumeah/NilSky/config"
 )
 
 type masterStackWindow struct {
@@ -100,7 +102,7 @@ func GetMasterStack(config []byte, decor config.Decorations) (Layout, error) {
 		l.stackX = decor.GapsOut + l.masterWidth + decor.GapsIn
 	} else {
 		l.masterX = decor.GapsOut + l.stackWidth + decor.GapsIn
-		l.masterX = decor.GapsOut
+		l.stackX = decor.GapsOut
 	}
 
 	return l, nil
@@ -179,7 +181,51 @@ func (l *MasterStack) Map(x *xgbutil.XUtil, e xevent.MapRequestEvent) error {
 		},
 	).Connect(x, e.Window)
 
+	xevent.ClientMessageFun(
+		func(x *xgbutil.XUtil, e xevent.ClientMessageEvent) {
+			netCloseWindow, err := xprop.Atm(x, "_NET_CLOSE_WINDOW")
+			if err != nil {
+				log.Printf("Error getting _NET_CLOSE_WINDOW atom: %v\n", err)
+				return
+			}
+
+			if e.Type == netCloseWindow {
+				handleNetCloseWindow(x, e)
+			}
+		},
+	).Connect(x, e.Window)
+
 	return nil
+}
+
+func handleNetCloseWindow(x *xgbutil.XUtil, e xevent.ClientMessageEvent) {
+	wmProtocols, err := xprop.Atm(x, "WM_PROTOCOLS")
+	if err != nil {
+		log.Printf("Error getting WM_PROTOCOLS atom: %v\n", err)
+		return
+	}
+	wmDelete, err := xprop.Atm(x, "WM_DELETE_WINDOW")
+	if err != nil {
+		log.Printf("Error getting WM_DELETE_WINDOW atom: %v\n", err)
+		return
+	}
+
+	if err := xproto.SendEventChecked(
+		x.Conn(), false, e.Window, 0,
+		string(
+			xproto.ClientMessageEvent{
+				Format: 32,
+				Window: e.Window,
+				Type:   wmProtocols,
+				Data: xproto.ClientMessageDataUnionData32New(
+					[]uint32{uint32(wmDelete), 0, 0, 0, 0},
+				),
+			}.Bytes(),
+		),
+	).Check(); err != nil {
+		log.Printf("Error sending WM_DELETE_WINDOW: %v\n", err)
+		return
+	}
 }
 
 func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) error {
@@ -236,114 +282,6 @@ func (l *MasterStack) destroy(x *xgbutil.XUtil, e xevent.DestroyNotifyEvent) err
 
 	if err := l.redraw(x); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func (*MasterStack) focus(x *xgbutil.XUtil, id xproto.Window) error {
-	return xproto.SetInputFocusChecked(
-		x.Conn(),
-		xproto.InputFocusPointerRoot,
-		id,
-		xproto.TimeCurrentTime,
-	).Check()
-}
-
-func (l *MasterStack) redraw(x *xgbutil.XUtil) error {
-	if l.master == nil {
-		return nil
-	}
-
-	if err := l.newFramedWindow(x, l.master); err != nil {
-		return err
-	}
-
-	for _, win := range l.stack {
-		if err := l.newFramedWindow(x, win); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (l *MasterStack) newFramedWindow(x *xgbutil.XUtil, win *masterStackWindow) error {
-	if win.frameID == 0 {
-		frame, err := xwindow.Generate(x)
-		if err != nil {
-			return err
-		}
-
-		if err := frame.CreateChecked(
-			x.RootWin(),
-			int(win.x),
-			int(win.y),
-			int(win.width),
-			int(win.height),
-			xproto.CwBackPixel,
-			uint32(l.borderColor),
-		); err != nil {
-			return err
-		}
-
-		if err := frame.Listen(xproto.EventMaskSubstructureNotify); err != nil {
-			return fmt.Errorf("Error listing for EventMaskSubstructureNotify: %w\n", err)
-		}
-
-		if err := xproto.ChangeSaveSetChecked(
-			x.Conn(),
-			xproto.SetModeInsert,
-			win.id,
-		).Check(); err != nil {
-			return err
-		}
-
-		if err := xproto.ReparentWindowChecked(
-			x.Conn(),
-			win.id,
-			frame.Id,
-			int16(l.decor.BorderWidth),
-			int16(l.decor.BorderWidth),
-		).Check(); err != nil {
-			return err
-		}
-
-		frame.Map()
-
-		win.frameID = frame.Id
-	} else {
-		if err := xproto.ConfigureWindowChecked(
-			x.Conn(), win.frameID,
-			xproto.ConfigWindowX|
-				xproto.ConfigWindowY|
-				xproto.ConfigWindowWidth|
-				xproto.ConfigWindowHeight,
-			[]uint32{
-				uint32(win.x),
-				uint32(win.y),
-				uint32(win.width),
-				uint32(win.height),
-			},
-		).Check(); err != nil {
-			return fmt.Errorf("Error resizing window: %v\n", err)
-		}
-	}
-
-	if err := xproto.ConfigureWindowChecked(
-		x.Conn(), win.id,
-		xproto.ConfigWindowX|
-			xproto.ConfigWindowY|
-			xproto.ConfigWindowWidth|
-			xproto.ConfigWindowHeight,
-		[]uint32{
-			uint32(l.decor.BorderWidth),
-			uint32(l.decor.BorderWidth),
-			uint32(win.width - (2 * l.decor.BorderWidth)),
-			uint32(win.height - (2 * l.decor.BorderWidth)),
-		},
-	).Check(); err != nil {
-		return fmt.Errorf("Error resizing window: %v\n", err)
 	}
 
 	return nil

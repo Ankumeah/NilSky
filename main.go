@@ -8,10 +8,11 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/Ankumeah/NilSky/config"
-	"github.com/Ankumeah/NilSky/sock"
-	"github.com/Ankumeah/NilSky/tile"
 	"github.com/jezek/xgbutil/xevent"
+
+	"github.com/Ankumeah/NilSky/config"
+	"github.com/Ankumeah/NilSky/ipc"
+	"github.com/Ankumeah/NilSky/tile"
 )
 
 func main() {
@@ -52,7 +53,7 @@ func main() {
 		log.Fatalf("Error loading keybinds: %v\n", err)
 	}
 
-	wg.Go(func() { sock.Listen(ctx) })
+	wg.Go(func() { ipc.Listen(ctx, x) })
 
 	log.Println("Up and running")
 	xevent.Main(x)
