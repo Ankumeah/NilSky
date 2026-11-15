@@ -1,5 +1,7 @@
 # NilSky
 
+![Horrible looking logo](./logo.png)
+
 NilSky is a minimal [x11](https://en.wikipedia.org/wiki/X_Window_System) WM written in [Golang](https://go.dev)
 
 ## Config
@@ -32,6 +34,9 @@ Send a close request to the window specified by window_pid or the currently focu
 #### Examples
 - `echo 'close_window focus' | nc -q 0 -U /run/user/1000/nilsky.sock`
 - `echo 'close_window 42042' | nc -q 0 -U /run/user/1000/nilsky.sock`
+
+## Horrible logo! Who made it?
+I did! [timelapse](https://lapse.hackclub.com/timelapse/z12bjn3NgZtZ)
 
 ## Lastest release
 [v0.1.0](https://github.com/Ankumeah/NilSky/releases/tag/v0.1.0)
